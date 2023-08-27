@@ -1,0 +1,150 @@
+---
+title: "Test_OLS"
+author: "Karan Gill"
+date: "2023-06-01"
+output:
+  html_document: default
+  word_document: default
+---
+Experimental Design:
+
+In the below experiment the number of covariate dimensions are being varied to observe how the train and test mean squared errors change. The parameters being considered are 'num_train_examples' which are the Number of training examples, 'num_test_examples' which are the Number of test examples, 'num_dimensions' which are the Range of covariate dimensions being considered, 'num_trials' which are the Number of trials for each covariate dimensionand random_seed which is a Random seed for ensuring the reproducibility of the experiment.
+
+For each of the covariate dimensions in the range specified in num_dimensions we are using a function run_trials which has the test_ols within it (defined by us). In each trial using the test_ols function the true beta coefficients and the training data covariates are being randomly sampled. The noise vector is generated along with training labels which use the beta coefficients and covariates which were randomly sampled. Using this training data we are fitting a linear regression model and then predicting the training labels to compute the mean squared error for the training data. A similar process is conducted for the test data. Thus, we are then calculating the average train and test mean squared errors for the given covariate dimensions.
+
+To obtain a more concrete estimate this trial is conducted multiple times and the errors are averaged over these multiple trials.
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Function to run a single trial for a given number of covariate dimensions
+test_ols <- function(num_train_examples, num_test_examples, feature_space_dimension, random_seed) {
+  
+  # Set the random seed.
+  set.seed(random_seed)
+  
+  # Randomly sample the true beta coefficients.
+  true_beta <- runif(feature_space_dimension)
+  true_beta <- matrix(true_beta, ncol = 1)  # Transpose to a column vector
+  
+  # Randomly sample the training data covariates.
+  X_train <- matrix(rnorm(num_train_examples * feature_space_dimension), nrow = num_train_examples)
+  
+  # Generate the noise vector.
+  noise_train <- rnorm(num_train_examples)
+  
+  # Generate the training labels.
+  y_train <- X_train %*% true_beta + noise_train
+  
+  # Create a data frame with both features and response variable.
+  train_data <- data.frame(X_train, y_train)
+  
+  # Fit the linear regression model.
+  model <- lm(y_train ~ ., data = train_data)
+  
+  # Get the estimated beta coefficients.
+  beta_OLS <- coef(model)
+  
+  # Predict the training labels.
+  y_train_pred <- predict(model)
+  
+  # Compute the training mean squared error.
+  train_mse <- mean((y_train_pred - y_train)^2)
+  
+  # Randomly sample the test data covariates.
+  X_test <- matrix(rnorm(num_test_examples * feature_space_dimension), nrow = num_test_examples)
+  
+  # Generate the noise vector.
+  noise_test <- rnorm(num_test_examples)
+  
+  # Generate the test labels.
+  y_test <- X_test %*% true_beta + noise_test
+  
+  # Predict the test labels.
+  y_test_pred <- predict(model, newdata = data.frame(X_test))
+  
+  # Compute the test mean squared error.
+  test_mse <- mean((y_test - y_test_pred)^2)
+  
+  # Return the train and test mean squared errors.
+  return(list(train_mse = train_mse, test_mse = test_mse))
+}
+
+```
+
+The code above has been used to generate the function to compute the train and test mean squared errors. The function takes inputs num_train_examples, num_test_examples, feature_space_dimension and random_seed to compute these values.
+
+```{r}
+# Function to run multiple trials for a given number of covariate dimensions
+run_trials <- function(num_train_examples, num_test_examples, num_dimensions, num_trials, random_seed) {
+  train_mse_avg <- numeric(length(num_dimensions))
+  test_mse_avg <- numeric(length(num_dimensions))
+  
+  for (i in seq_along(num_dimensions)) {
+    train_mse_trials <- numeric(num_trials)
+    test_mse_trials <- numeric(num_trials)
+    
+    for (j in 1:num_trials) {
+      result <- test_ols(num_train_examples, num_test_examples, num_dimensions[i], random_seed + j)
+      train_mse_trials[j] <- result$train_mse
+      test_mse_trials[j] <- result$test_mse
+    }
+    
+    train_mse_avg[i] <- mean(train_mse_trials)
+    test_mse_avg[i] <- mean(test_mse_trials)
+  }
+  
+  return(data.frame(num_dimensions, train_mse_avg, test_mse_avg))
+}
+
+
+```
+
+The above function has been used to simulate multiple runs for a given number of covariate dimensions. The function run_trials takes num_train_examples, num_test_examples, num_dimensions, num_trials and random_seed to simulate multiple runs and get values for test and train mean squared error for the given number of covariate dimensions.
+
+
+
+```{r}
+# Set the parameters
+num_train_examples <- 100
+num_test_examples <- 50
+num_dimensions <- seq(2, 80, by = 2)  # Range of covariate dimensions
+num_trials <- 10  # Number of trials for each covariate dimension
+random_seed <- 42
+
+# Run trials and obtain the data
+data <- run_trials(num_train_examples, num_test_examples, num_dimensions, num_trials, random_seed)
+# Compute confidence intervals
+    lower_train_mse = data$train_mse_avg - 2 * sd(data$train_mse_avg) / sqrt(num_trials)
+    upper_train_mse =data$train_mse_avg + 2 * sd(data$train_mse_avg) / sqrt(num_trials)
+    lower_test_mse = data$test_mse_avg - 2 * sd(data$test_mse_avg) / sqrt(num_trials)
+    upper_test_mse = data$test_mse_avg + 2 * sd(data$test_mse_avg) / sqrt(num_trials)
+
+
+# Combine train and test data for plotting
+data_plot <- data.frame(
+  num_dimensions = rep(data$num_dimensions, 2),
+  mse = c(data$train_mse_avg, data$test_mse_avg),
+  data_type = rep(c("Train MSE", "Test MSE"), each = length(data$num_dimensions))
+)
+
+# Generate the plot
+plot <- ggplot() +
+  geom_line(data = data_plot, aes(x = num_dimensions, y = mse, color = data_type)) +
+  geom_ribbon(aes(x = num_dimensions, ymin = lower_train_mse, ymax = upper_train_mse, fill = "Train MSE"), alpha = 0.3) +
+  geom_ribbon(aes(x = num_dimensions, ymin = lower_test_mse, ymax = upper_test_mse, fill = "Test MSE"), alpha = 0.3) +
+  labs(x = "Number of Covariate Dimensions", y = "Mean Squared Error") +
+  ggtitle("Train and Test MSE vs. Covariate Dimensions") +
+  scale_color_manual(values = c("red", "blue")) +
+  scale_fill_manual(values = c("Train MSE" = "blue", "Test MSE" = "red"))
+
+# Display the plot
+print(plot)
+```
+
+Experimental Results:
+
+We have inputed num_train_examples as 100,num_test_examples as 50, num_dimensions as a range of 2 to 80, by 2 values (these are the range of covariate dimensions), num_trials as 10 which is number of trials for each covariate dimension and the random_seed as 42. 
+A graph is plotted showing the mean squared error for both the test and train data vs number of covariate dimensions. The test MSE is represented by a blue line and the train MSE is represented by a red line. The train confidence interval is shown by a blue region and the test confidence interval is highlighted with a red region. The train MSE gradually decreases from 1 to 0 as the dimensions increase whereas the test MSE increases as can be seen from the plot.
+
+The train MSE decreases from one to zero as the number of covariate dimensions increase. This is due to the OLS estimator minimizing the least square errors.The MSE is at its maximum when the predictors are at a minimum. As the number of dimensions increase, the off diagonal elements of XX^(T) shrink, eventually reaching 0 (causing the free variables to decrease). Thus the error decreases from 1 to 0. This gradual decrease indicates a good fit for the data. For the test data it is observed that the mean squared error increases as the number of dimensions increase. This happens as the MSE error is broken down into the squared bias and the variance. In this particular case the bias is 0 and the variance keeps increasing as the dimensions increase. Thus, the Mean Squared Error in this case is just the variance and thus, it increases as the number of dimensions increase. 

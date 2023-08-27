@@ -1,0 +1,26 @@
+---
+title: "Missing Data in Dataset"
+author: "Karan Gill"
+date: "2023-06-19"
+output: html_document
+---
+The script has been created to check the number of missing values in our dataset.
+
+```{r}
+library(readxl)
+library(tidyverse)
+
+setwd("C:/Users/Karan/Desktop/Dissertation/")
+data <- read_excel("Final.xlsx")
+
+# Check for missing values in the dataset
+missing_values = data %>%
+  is.na() %>%
+  colSums()
+
+# Print the number of missing values for each variable
+print(missing_values)
+
+
+```
+

@@ -1,0 +1,136 @@
+---
+title: "Player_Valuation_Ridge_Sample"
+author: "Karan Gill"
+date: "2023-08-05"
+output: html_document
+---
+Experimental Design:
+
+In the experiment below the dataset being considered is a Player Valuation dataset. The dataset contains 50 features about 519 players from the top 5 European Leagues Premier League (England), La Liga (Spain), Serie A (Italy), Bundesliga (Germany) and Ligue 1(France). The dataset has been split into Train, Test and Validation data in a 60-20-20 split. A regularization parameter (Lambda) has been formulated in the form of lambdas <- 10^seq(-6, 6, by = 1). Ridge Regression has been used to get an appropriate estimate of the model. 
+
+The dataset has certain players which have missing values for their columns. These players have been omitted from the dataset on which the regression is being performed for the sake of simplicity. 
+
+First the dataset is loaded from the excel file to R, along with the necessary packages.
+```{r}
+# Load necessary libraries
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(caret)
+library(glmnet)
+library(ggplot2)
+library(reshape2)
+
+# Load the data
+setwd("C:/Users/Karan/Desktop/Dissertation")
+data <- read_excel("Player_Valuation.xlsx")
+```
+
+Once the data is loaded, the data is then pre processed for missing values. These variables having missing values are omitted from the data and the data left over is split into train, test and validation data in a 60-20-20 split.
+```{r}
+# Remove rows with missing values
+data_clean <- na.omit(data)
+
+# Separate predictors and response
+X <- data_clean %>% select(-Ranking, -Player, -Market_Value)
+y <- data_clean$Market_Value
+
+# Encode categorical variables
+X_encoded <- model.matrix(~., data = X)
+
+prop_train_examples <- 0.6
+
+# Split the data
+set.seed(42)
+trainIndex <- createDataPartition(y, p = prop_train_examples, list = FALSE)
+X_train_val <- X_encoded[trainIndex,]
+y_train_val <- y[trainIndex]
+X_test <- X_encoded[-trainIndex,]
+y_test <- y[-trainIndex]
+
+trainIndex <- createDataPartition(y_train_val, p = 0.75, list = FALSE)
+X_train <- X_train_val[trainIndex,]
+y_train <- y_train_val[trainIndex]
+X_val <- X_train_val[-trainIndex,]
+y_val <- y_train_val[-trainIndex]
+```
+
+Now, the hyperparameter lambda is tuned by training the Ridge Regression Model with different values of lambda. A dataframe is created to store the results of the model which will be used to plot graphs later. 
+
+```{r}
+# Range of lambda values
+lambdas <- 10^seq(-6, 6, by = 1)
+
+# Data frame to store results
+results <- data.frame()
+
+# Loop through lambda values
+for (alpha in lambdas) {
+  model <- glmnet(X_train, y_train, alpha = 0, lambda = alpha)
+  
+  # Train and Test Errors
+  train_pred <- predict(model, X_train)
+  test_pred <- predict(model, X_test)
+  train_error <- mean((y_train - train_pred)^2)
+  test_error <- mean((y_test - test_pred)^2)
+
+  # Bias Squared and Variance
+  predictions <- predict(model, X_val)
+  bias_sq <- mean((y_val - predictions)^2)
+  variance <- mean((predictions - mean(predictions))^2)
+  
+  # Add to results data frame
+  results <- rbind(results, data.frame(Lambda=alpha, TrainError=train_error, TestError=test_error, BiasSquared=bias_sq, Variance=variance))
+}
+```
+
+A dataset called results is created which contains all the error values for the train and test data along with their corressponding lambda value. These error values have been used to calculate the confidence bands. Using these values a graph has been plotted where X axis is the regularisation parameter and Y axis is the train and test error. 
+
+
+
+```{r}
+# Plot Train and Test Errors vs Lambda (with confidence bands)
+ggplot(results, aes(x=log10(Lambda))) +
+  geom_line(aes(y=TrainError, color="Train Error")) +
+  geom_line(aes(y=TestError, color="Test Error")) +
+  geom_ribbon(aes(ymin=TrainError-1.96*sqrt(TrainError), ymax=TrainError+1.96*sqrt(TrainError), fill="Train Error"), alpha=0.2) +
+  geom_ribbon(aes(ymin=TestError-1.96*sqrt(TestError), ymax=TestError+1.96*sqrt(TestError), fill="Test Error"), alpha=0.2) +
+  scale_color_manual(values = c("Train Error" = "blue", "Test Error" = "red")) +
+  scale_fill_manual(values = c("Train Error" = "blue", "Test Error" = "red")) +
+  labs(x = "log10(lambda)", y = "Error", title = "Mean Train and Test Errors with Confidence Bands") +
+  theme_minimal() 
+```
+
+A graph is plotted showing the mean squared error for both the test and train data vs the hyperparameter lambda . The test MSE is represented by a red line and the train MSE is represented by a blue line. The train confidence interval is shown by a blue region and the test confidence interval is highlighted with a red region.
+The train error initally is constant and then increases suddenly between the values log10(lambda) = -1 and log10(lambda) = 4. The test MSE initially decreases before reaching a minimum at log10(lambda) = 1. Post this the Test MSE increases. This is as expected as the train and the test error increase as the bias squared increases as the regulation parameter increases while the variance tends to 0. Thus after a point (in this case log10(lambda) = 1) the mean squared error is just the bias squared. This is seen in the next plot. 
+
+```{r}
+# Plot Bias Squared and Variance vs Lambda
+ggplot(results, aes(x=log10(Lambda))) +
+  geom_line(aes(y=BiasSquared, color="Bias Squared")) +
+  geom_line(aes(y=Variance, color="Variance")) +
+  labs(title="Bias Squared and Variance vs Lambda", x="Lambda", y="Value") +
+  scale_color_manual(values=c("Bias Squared"="blue", "Variance"="red"))
+```
+
+In the graph the bias squared is represented by a blue line and initally decreases before reaching a minimum at log10(lambda) = 1. After this the bias squared gradually increases.  the variance is represented by the red line. The variance initally is constant before gradually falling before tending to 0 at log10(lambda) = 3.The Mean Squared Error is a sum of the bias squared and the variance. As the regularization parameter increases the bias increases slightly and the variance decreases. This happens because as the model becomes more restricted and simpler, sacrificing some flexibility to reduce the variance and improve generalization, the bias increases. Similarly this causes the variance to reduce before tending to 0 as the regularization parameter increases. Thus, the Mean Squared Error is caused solely by the bias squared.
+
+There is also a plot for the coefficients of the Ridge Model vs the regularization parameter (lambda)
+
+```{r}
+# Initialize a matrix to store coefficients
+coefficients <- matrix(0, nrow=length(lambdas), ncol=ncol(X_encoded))
+
+# Loop through lambda values to collect coefficients
+for (i in seq_along(lambdas)) {
+  alpha <- lambdas[i]
+  model <- glmnet(X_train, y_train, alpha = 0, lambda = alpha)
+  coefficients[i,] <- as.numeric(coef(model)[-1]) # Removing intercept
+}
+
+# Plot Coefficients vs Lambda using matplot
+matplot(log10(lambdas), coefficients, type="l", xlab="Lambda", ylab="Coefficient Value", main="Coefficients vs Lambda")
+
+```
+
+The coefficients for the Ridge Model stay constant for the initial values of lambda before converging to 0 at log10(lambda) = 3 (approx). This is similar to the variance tending to 0 too at the similar value of lambda. For the case of the regularization parameter lambda, the ridge estimates are just a scaled version of the least squares estimates. Ridge regression focuses on compressing the coefficients to become smaller. 
