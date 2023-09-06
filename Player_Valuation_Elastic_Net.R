@@ -2,7 +2,7 @@
 library(glmnet)
 library(caret)
 
-# Prepare the data (as before)
+# Prepare the data
 # Load the data
 setwd("C:/Users/Karan/Desktop/Dissertation")
 data <- read_excel("Player_Valuation.xlsx")
@@ -74,9 +74,9 @@ for (alpha in lambdas) {
   test_error <- mean((y_test - test_pred)^2)
   
   # Bias Squared and Variance
-  predictions <- predict(model, X_val)
-  bias_sq <- mean((y_val - predictions)^2)
-  variance <- mean((predictions - mean(predictions))^2)
+
+  bias_sq <- mean((y_train - train_pred)^2)
+  variance <- mean((train_pred - mean(train_pred))^2)
   
   # Add to results data frame
   results <- rbind(results, data.frame(Lambda=alpha, TrainError=train_error, TestError=test_error, BiasSquared=bias_sq, Variance=variance))
@@ -107,9 +107,11 @@ coefficients <- matrix(0, nrow=length(lambdas), ncol=ncol(X_encoded))
 # Loop through lambda values to collect coefficients
 for (i in seq_along(lambdas)) {
   alpha <- lambdas[i]
-  model <- glmnet(X_train, y_train, alpha = 0, lambda = alpha)
+  model <- glmnet(X_train, y_train, alpha = 0.3, lambda = alpha)
   coefficients[i,] <- as.numeric(coef(model)[-1]) # Removing intercept
 }
 
 # Plot Coefficients vs Lambda using matplot
 matplot(lambdas, coefficients, type="l", log="x", xlab="Lambda", ylab="Coefficient Value", main="Coefficients vs Lambda")
+
+View(coefficients)

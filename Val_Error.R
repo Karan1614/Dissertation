@@ -33,62 +33,48 @@ y_test <- y[-trainIndex]
 
 trainIndex <- createDataPartition(y_train_val, p = 0.75, list = FALSE)
 X_train <- X_train_val[trainIndex,]
-y_train <- y_train_val[trainIndex]
+y_train <- as.matrix(y_train_val[trainIndex])
 X_val <- X_train_val[-trainIndex,]
 y_val <- y_train_val[-trainIndex]
 
 # Range of lambda values
 lambdas <- 10^seq(-6, 6, by = 1)
 
+
+
 # Data frame to store results
 results <- data.frame()
 
 # Loop through lambda values
 for (alpha in lambdas) {
-  model <- glmnet(X_train, y_train, alpha = 1, lambda = alpha)
+  model <- glmnet(X_train, y_train, alpha = 0.3, lambda = alpha)
   
-  # Train and Test Errors
+  # Train, Validation, and Test Errors
   train_pred <- predict(model, X_train)
+  val_pred <- predict(model, X_val)
   test_pred <- predict(model, X_test)
+  
   train_error <- mean((y_train - train_pred)^2)
+  val_error <- mean((y_val - val_pred)^2)
   test_error <- mean((y_test - test_pred)^2)
   
   # Bias Squared and Variance
   bias_sq <- mean((y_train - train_pred)^2)
-  variance <- mean((train_pred  - mean(train_pred))^2)
+  variance <- mean((train_pred - mean(train_pred))^2)
   
   # Add to results data frame
-  results <- rbind(results, data.frame(Lambda=alpha, TrainError=train_error, TestError=test_error, BiasSquared=bias_sq, Variance=variance))
+  results <- rbind(results, data.frame(Lambda=alpha, TrainError=train_error, ValError=val_error, TestError=test_error, BiasSquared=bias_sq, Variance=variance))
 }
 
-# Plot Train and Test Errors vs Lambda (with confidence bands)
+# Plot Train, Validation, and Test Errors vs Lambda (with confidence bands)
 ggplot(results, aes(x=log10(Lambda))) +
   geom_line(aes(y=TrainError, color="Train Error")) +
+  geom_line(aes(y=ValError, color="Validation Error")) +
   geom_line(aes(y=TestError, color="Test Error")) +
   geom_ribbon(aes(ymin=TrainError-1.96*sqrt(TrainError), ymax=TrainError+1.96*sqrt(TrainError), fill="Train Error"), alpha=0.2) +
+  geom_ribbon(aes(ymin=ValError-1.96*sqrt(ValError), ymax=ValError+1.96*sqrt(ValError), fill="Validation Error"), alpha=0.2) +
   geom_ribbon(aes(ymin=TestError-1.96*sqrt(TestError), ymax=TestError+1.96*sqrt(TestError), fill="Test Error"), alpha=0.2) +
-  scale_color_manual(values = c("Train Error" = "blue", "Test Error" = "red")) +
-  scale_fill_manual(values = c("Train Error" = "blue", "Test Error" = "red")) +
-  labs(x = "log10(lambda)", y = "Error", title = "Mean Train and Test Errors with Confidence Bands") +
-  theme_minimal() 
-
-# Plot Bias Squared and Variance vs Lambda
-ggplot(results, aes(x=log10(Lambda))) +
-  geom_line(aes(y=BiasSquared, color="Bias Squared")) +
-  geom_line(aes(y=Variance, color="Variance")) +
-  labs(title="Bias Squared and Variance vs Lambda", x="Lambda", y="Value") +
-  scale_color_manual(values=c("Bias Squared"="blue", "Variance"="red"))
-
-
-# Initialize a matrix to store coefficients
-coefficients <- matrix(0, nrow=length(lambdas), ncol=ncol(X_encoded))
-
-# Loop through lambda values to collect coefficients
-for (i in seq_along(lambdas)) {
-  alpha <- lambdas[i]
-  model <- glmnet(X_train, y_train, alpha = 1, lambda = alpha)
-  coefficients[i,] <- as.numeric(coef(model)[-1]) # Removing intercept
-}
-
-# Plot Coefficients vs Lambda using matplot
-matplot(lambdas, coefficients, type="l", log="x", xlab="Lambda", ylab="Coefficient Value", main="Coefficients vs Lambda")
+  scale_color_manual(values = c("Train Error" = "blue", "Validation Error" = "green", "Test Error" = "red")) +
+  scale_fill_manual(values = c("Train Error" = "blue", "Validation Error" = "green", "Test Error" = "red")) +
+  labs(x = "log10(lambda)", y = "Error", title = "Mean Train, Validation, and Test Errors with Confidence Bands") +
+  theme_minimal()

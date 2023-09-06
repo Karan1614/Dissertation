@@ -28,6 +28,16 @@ optimal_lambda
 
 # Compute Ridge Regression coefficients using the formula for the optimal lambda
 beta_ridge <- solve(t(X_encoded) %*% X_encoded + optimal_lambda * diag(ncol(X_encoded))) %*% t(X_encoded) %*% y
-View(beta_ridge)
-# Print the coefficients for reference
-head(beta_ridge)
+
+beta_df <- as.data.frame(beta_ridge)
+beta_df$Variable <- rownames(beta_df)
+colnames(beta_df)[1] <- "Coefficient"
+
+# Plot the coefficients
+ggplot(beta_df, aes(x=Variable, y=Coefficient)) +
+  geom_bar(stat='identity') +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title = "Ridge Regression Coefficients",
+       x = "Variables",
+       y = "Coefficient Value")
+

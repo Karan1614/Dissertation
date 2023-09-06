@@ -33,7 +33,7 @@ y_test <- y[-trainIndex]
 
 trainIndex <- createDataPartition(y_train_val, p = 0.75, list = FALSE)
 X_train <- X_train_val[trainIndex,]
-y_train <- y_train_val[trainIndex]
+y_train <- as.matrix(y_train_val[trainIndex])
 X_val <- X_train_val[-trainIndex,]
 y_val <- y_train_val[-trainIndex]
 
@@ -54,9 +54,9 @@ for (alpha in lambdas) {
   test_error <- mean((y_test - test_pred)^2)
   
   # Bias Squared and Variance
-  predictions <- predict(model, X_val)
-  bias_sq <- mean((y_val - predictions)^2)
-  variance <- mean((predictions - mean(predictions))^2)
+  
+  bias_sq <- mean((y_train - train_pred)^2)
+  variance <- mean((train_pred - mean(train_pred))^2)
   
   # Add to results data frame
   results <- rbind(results, data.frame(Lambda=alpha, TrainError=train_error, TestError=test_error, BiasSquared=bias_sq, Variance=variance))
